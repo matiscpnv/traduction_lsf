@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Traduction Langue des Signes</title>
+    <style>
+      /* --- RESET / BASE --- */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        background: #0f172a;
+        color: #f8fafc;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding: 2rem;
+      }
+
+      h1 {
+        font-size: 2.5rem;
+        margin-bottom: 1.5rem;
+        color: #38bdf8;
+        text-align: center;
+      }
+
+      h2 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+        color: #facc15;
+      }
+
+      /* --- VIDÉO --- */
+      .video-container {
+        background: #1e293b;
+        border: 3px solid #38bdf8;
+        border-radius: 1rem;
+        padding: 1rem;
+        box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+        margin-bottom: 2rem;
+      }
+
+      .video-container img {
+        width: 640px;
+        max-width: 90vw;
+        border-radius: 0.5rem;
+      }
+
+      /* --- PHRASE --- */
+      .phrase-container {
+        background: #1e293b;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        text-align: center;
+        max-width: 640px;
+        width: 90%;
+        box-shadow: 0 0 15px rgba(250, 204, 21, 0.4);
+      }
+
+      #traduction {
+        font-size: 1.8rem;
+        font-weight: bold;
+        margin: 1rem 0;
+        color: #f8fafc;
+      }
+
+      /* --- BOUTONS --- */
+      .btn {
+        padding: 0.7rem 1.5rem;
+        margin: 0.3rem;
+        border: none;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .btn-reset {
+        background: #ef4444;
+        color: white;
+      }
+
+      .btn-reset:hover {
+        background: #dc2626;
+      }
+
+      .btn-speak {
+        background: #22c55e;
+        color: white;
+      }
+
+      .btn-speak:hover {
+        background: #16a34a;
+      }
+
+      /* --- ANIM TEXTE --- */
+      #traduction {
+        transition: color 0.3s ease, transform 0.2s ease;
+      }
+
+      #traduction.updated {
+        color: #38bdf8;
+        transform: scale(1.05);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🤟 Traduction en Langue des Signes (ASL)</h1>
+
+    <!-- Vidéo -->
+    <div class="video-container">
+      <h2>🎥 Vidéo en direct</h2>
+      <img src="/video" alt="Flux vidéo en direct" />
+    </div>
+
+    <!-- Traduction -->
+    <div class="phrase-container">
+      <h2>💬 Phrase détectée</h2>
+      <p id="traduction">Chargement...</p>
+      <button class="btn btn-reset" onclick="resetPhrase()">🔄 Effacer</button>
+      <button class="btn btn-speak" onclick="speakPhrase()">
+        🔊 Lire la phrase
+      </button>
+    </div>
+
+    <script>
+      let currentPhrase = "";
+
+      // Mise à jour de la phrase toutes les 800ms
+      setInterval(async () => {
+        try {
+          const response = await fetch("/predict");
+          const data = await response.json();
+          if (data.traduction !== currentPhrase) {
+            currentPhrase = data.traduction;
+            const tradElem = document.getElementById("traduction");
+            tradElem.innerText = "Phrase : " + currentPhrase;
+            tradElem.classList.add("updated");
+            setTimeout(() => tradElem.classList.remove("updated"), 400);
+          }
+        } catch (err) {
+          console.error("Erreur de récupération :", err);
+        }
+      }, 800);
+
+      // Réinitialiser la phrase
+      async function resetPhrase() {
+        await fetch("/reset", { method: "POST" });
+        currentPhrase = "";
+        document.getElementById("traduction").innerText = "Phrase : ";
+      }
+
+      // Lire la phrase avec synthèse vocale
+      function speakPhrase() {
+        if (currentPhrase.length === 0) return;
+        const synth = window.speechSynthesis;
+        const utterance = new SpeechSynthesisUtterance(currentPhrase);
+        utterance.lang = "fr-FR";
+        synth.speak(utterance);
+      }
+    </script>
+  </body>
+</html>
