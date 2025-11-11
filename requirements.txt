@@ -4,3 +4,4 @@ numpy
 pandas
 gunicorn
 opencv-python-headless
+mediapipe
