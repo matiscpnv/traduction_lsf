@@ -1,3 +1,4 @@
+import os
 import cv2
 import mediapipe as mp
 from flask import Flask, render_template, Response, jsonify, request
@@ -6,22 +7,30 @@ import numpy as np
 import threading
 import time
 
+# Détection si on est sur Render (variable d’environnement)
+IS_RENDER = os.environ.get("RENDER", "0") == "1"
+
 # Initialisation de Flask
 app = Flask(__name__)
 
-# Initialisation de MediaPipe pour la détection des mains
+# Initialisation MediaPipe
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 mp_drawing = mp.solutions.drawing_utils
 
-# Charger le modèle entraîné sur Sign Language MNIST
+# Charger le modèle
 model = tf.keras.models.load_model('sign_language_model.h5')
 
-# Initialisation de la caméra
-camera = cv2.VideoCapture(0)
-if not camera.isOpened():
-    print("❌ Erreur : Impossible d'ouvrir la caméra")
-    exit()
+# Caméra (désactivée sur Render)
+camera = None
+
+if not IS_RENDER:
+    camera = cv2.VideoCapture(0)
+    if not camera.isOpened():
+        print("❌ Erreur : Impossible d'ouvrir la caméra")
+        exit()
+else:
+    print("🚫 Mode Render : Caméra désactivée")
 
 # Variables globales
 prediction = None
@@ -30,7 +39,7 @@ phrase = ""
 last_letter = ""
 last_time = time.time()
 
-# Mapping des classes ASL (25 lettres, J et Z exclus)
+# Mapping ASL
 label_map = {
     0: "A", 1: "B", 2: "C", 3: "D", 4: "E",
     5: "F", 6: "G", 7: "H", 8: "I",
@@ -39,7 +48,7 @@ label_map = {
     19: "U", 20: "V", 21: "W", 22: "X", 23: "Y"
 }
 
-# Prédiction à partir d'une image
+# Predire la main
 def predict_hand(frame):
     global prediction, phrase, last_letter, last_time
 
@@ -63,10 +72,22 @@ def predict_hand(frame):
         last_letter = letter
         last_time = current_time
 
-# Générateur de frames pour le flux vidéo
+# Générateur vidéo
 def gen_frames():
     global prediction, frame_count
 
+    # Mode Render → pas de caméra
+    if camera is None:
+        while True:
+            blank = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(blank, "Camera non disponible sur le serveur",
+                        (20, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                        (255, 255, 255), 2)
+            ret, buffer = cv2.imencode('.jpg', blank)
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
+    # Mode local → webcam OK
     while True:
         success, frame = camera.read()
         if not success:
@@ -99,29 +120,26 @@ def gen_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
-# Route principale
+# Routes Flask
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Route vidéo
 @app.route('/video')
 def video():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-# Route pour la phrase actuelle
 @app.route('/predict', methods=['GET'])
 def predict():
     global phrase
     return jsonify({"traduction": phrase})
 
-# Route pour réinitialiser la phrase
 @app.route('/reset', methods=['POST'])
 def reset():
     global phrase
     phrase = ""
     return jsonify({"status": "ok"})
 
-# Lancer l'application
+# Lancer
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=10000, debug=False)
